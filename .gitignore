@@ -1,0 +1,8 @@
+*.class
+*.pyc
+*.xml
+*.pdf
+*.dot
+*.data
+*.names
+*.test
