@@ -156,6 +156,34 @@ def boostTest(tx, ty, rx, ry, iterations):
     plt.show()
 
 
+def nntester(tx, ty, rx, ry, iterations):
+    """
+    builds, tests, and graphs a neural network over a series of trials as it is
+    constructed
+    """
+    resultst = []
+    resultsr = []
+    positions = range(iterations)
+    network = buildNetwork(14, 10, 4,  1)
+    ds = ClassificationDataSet(14,1, class_labels=["<50K", ">=50K"])
+    for i in xrange(len(tx)):
+        ds.addSample(tx[i], [ty[i]])
+    trainer = BackpropTrainer(network, ds)
+    for i in positions:
+        trainer.trainOnDataset(ds, 1)
+        resultst.append(sum((np.array([round(network.activate(test)) for test in tx]) - ty)**2)/float(len(ty)))
+        resultsr.append(sum((np.array([round(network.activate(test)) for test in rx]) - ry)**2)/float(len(ry)))
+        print i, resultst[i], resultsr[i]
+    NetworkWriter.writeToFile(network, "network.xml")
+    plt.plot(positions, resultst, 'ro', positions, resultsr, 'bo')
+    plt.axis([0, iterations, 0, 1])
+    plt.show()
+    plt.savefig('nngraph.png')
+
+
+
+
+
 if __name__ == "__main__":
     tx, ty, rx, ry = start_adult()
     # print "Decision Tree: " + str(decisionTree(rx, ry, tx, ty))
@@ -166,5 +194,6 @@ if __name__ == "__main__":
     # print "Boosting (100): " + str(boosting(tx, ty, rx, ry, 100))
     # print "Boosting (500): " + str(boosting(tx, ty, rx, ry, 500))
     # print "SVM: " + str(svm(tx, ty, rx, ry))
-    boostTest(tx, ty, rx, ry, 25)
+    # boostTest(tx, ty, rx, ry, 25)
+    nntester(tx, ty, rx, ry, 100)
 
