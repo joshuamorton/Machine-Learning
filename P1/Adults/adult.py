@@ -16,6 +16,7 @@ from sklearn.svm import SVC, LinearSVC
 from StringIO import StringIO
 from pybrain.datasets.classification import ClassificationDataSet
 from pybrain.tools.shortcuts import buildNetwork
+from pybrain.tools.validation import CrossValidator
 from pybrain.supervised.trainers import BackpropTrainer
 from pybrain.tools.xml.networkwriter import NetworkWriter
 from pybrain.tools.xml.networkreader import NetworkReader
@@ -94,10 +95,10 @@ def start_adult():
     return tx, ty, rx, ry 
 
 
-def decisionTree(tx, ty, rx, ry):
+def decisionTree(tx, ty, rx, ry, height):
     """
     """
-    clf = tree.DecisionTreeClassifier(criterion="entropy", max_depth=4)
+    clf = tree.DecisionTreeClassifier(criterion="gini", max_depth=1)
     clf.fit(tx, ty)
     dotdata = StringIO()
     tree.export_graphviz(clf, out_file=dotdata) 
@@ -112,6 +113,29 @@ def knn(tx, ty, rx, ry, n):
     neigh = neighbors.KNeighborsClassifier(n_neighbors=n)
     neigh = neigh.fit(tx, ty)
     return sum((neigh.predict(rx) - ry)**2)/float(len(ry))
+
+
+def knntester(tx, ty, rx, ry, iterations):
+    """
+    """
+    er = []
+    et = []
+    positions = range(1,iterations)
+    for n in xrange(1,iterations):
+        neigh = neighbors.KNeighborsClassifier(n_neighbors=n, weights='distance')
+        neigh = neigh.fit(tx, ty)
+        er.append(sum((neigh.predict(rx) - ry)**2)/float(len(ry)))
+        et.append(sum((neigh.predict(tx) - ty)**2)/float(len(ty)))
+        print n
+    plt.plot(positions, et, 'ro', positions, er, 'bo')
+    plt.axis([0, iterations, 0, 1])
+    plt.title("Weighted KNN error")
+    plt.ylabel("percent error")
+    plt.xlabel("number of neighbors")
+    plt.savefig('weightedknngraph.png', dpi=300)
+    plt.show()
+    print er
+    print et
 
 
 def nn(tx, ty, rx, ry, iterations):
@@ -164,21 +188,35 @@ def nntester(tx, ty, rx, ry, iterations):
     resultst = []
     resultsr = []
     positions = range(iterations)
-    network = buildNetwork(14, 10, 4,  1)
+    network = buildNetwork(14, 14, 1, bias=True)
     ds = ClassificationDataSet(14,1, class_labels=["<50K", ">=50K"])
     for i in xrange(len(tx)):
         ds.addSample(tx[i], [ty[i]])
-    trainer = BackpropTrainer(network, ds)
+    trainer = BackpropTrainer(network, ds, learningrate=0.01)
     for i in positions:
-        trainer.trainOnDataset(ds, 1)
+        print trainer.train()
         resultst.append(sum((np.array([round(network.activate(test)) for test in tx]) - ty)**2)/float(len(ty)))
         resultsr.append(sum((np.array([round(network.activate(test)) for test in rx]) - ry)**2)/float(len(ry)))
         print i, resultst[i], resultsr[i]
     NetworkWriter.writeToFile(network, "network.xml")
     plt.plot(positions, resultst, 'ro', positions, resultsr, 'bo')
     plt.axis([0, iterations, 0, 1])
+    plt.ylabel("Percent Error")
+    plt.xlabel("Network Epoch")
+    plt.title("Neural Network Error")
+    plt.savefig('3Lnn.png', dpi=200)
     plt.show()
-    plt.savefig('nngraph.png')
+
+
+def cvnntester(tx, ty, rx, ry, iterations, folds):
+    network = buildNetwork(14, 14, 1, bias=True)
+    ds = ClassificationDataSet(14,1, class_labels=["<50K", ">=50K"])
+    for i in xrange(len(tx)):
+        ds.addSample(tx[i], [ty[i]])
+    trainer = BackpropTrainer(network, ds, learningrate=0.01)
+    cv = CrossValidator(trainer, ds, n_folds=folds, max_epochs=iterations, verbosity=True)
+    print cv.validate()
+    print sum((np.array([round(network.activate(test)) for test in rx]) - ry)**2)/float(len(ry))
 
 
 
@@ -186,7 +224,8 @@ def nntester(tx, ty, rx, ry, iterations):
 
 if __name__ == "__main__":
     tx, ty, rx, ry = start_adult()
-    # print "Decision Tree: " + str(decisionTree(rx, ry, tx, ty))
+    print "Decision Tree: " + str(decisionTree(rx, ry, tx, ty, 1))
+
     # print "Nearest Neighbor: " + str(knn(rx, ry, tx, ty, 1))
     # print "3-Nearest Neighbors: " + str(knn(rx, ry, tx, ty, 3))
     # print "5-Nearest Neighbors: " + str(knn(rx, ry, tx, ty, 25))
@@ -195,5 +234,13 @@ if __name__ == "__main__":
     # print "Boosting (500): " + str(boosting(tx, ty, rx, ry, 500))
     # print "SVM: " + str(svm(tx, ty, rx, ry))
     # boostTest(tx, ty, rx, ry, 25)
-    nntester(tx, ty, rx, ry, 100)
+    # nntester(tx, ty, rx, ry, 500)
+    # knntester(tx, ty, rx, ry, 100)
+    cvnntester(tx, ty, rx, ry, 500, 10)
 
+
+"""
+decision stump result: .248922% error, as a baseline
+pruned decision tree result: .217984% error
+unpruned adaboost decision stump (10): .15926% error
+"""
