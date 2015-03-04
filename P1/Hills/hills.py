@@ -26,63 +26,26 @@ from pprint import pprint
 import matplotlib.pyplot as plt
 
 
-#training data is contained in "adult.data"
-
-"""
-the csv data is stored as such:
-age,workclass,fnlwgt,education,education-num,marital-status,occupation,relationship,race,sex,capital-gain,capital-loss,hours-per-week,native-country,income
-these values are explained in the file adult.names
-our first step is to parse the data
-"""
-
-#first we define a set of conversion functions from strings to integer values because working with strings is dumb
-#especially since the computer doens't care when doing machine learning
-def create_mapper(l):
-    return {l[n] : n for n in xrange(len(l))}
-
-workclass = create_mapper(["Private", "Self-emp-not-inc", "Self-emp-inc", "Federal-gov", "Local-gov", "State-gov", "Without-pay", "Never-worked"])
-education = create_mapper(["Bachelors", "Some-college", "11th", "HS-grad", "Prof-school", "Assoc-acdm", "Assoc-voc", "9th", "7th-8th", "12th", "Masters", "1st-4th", "10th", "Doctorate", "5th-6th", "Preschool"])
-marriage = create_mapper(["Married-civ-spouse", "Divorced", "Never-married", "Separated", "Widowed", "Married-spouse-absent", "Married-AF-spouse"])
-occupation = create_mapper(["Tech-support", "Craft-repair", "Other-service", "Sales", "Exec-managerial", "Prof-specialty", "Handlers-cleaners", "Machine-op-inspct", "Adm-clerical", "Farming-fishing", "Transport-moving", "Priv-house-serv", "Protective-serv", "Armed-Forces"])
-relationship = create_mapper(["Wife", "Own-child", "Husband", "Not-in-family", "Other-relative", "Unmarried"])
-race = create_mapper(["White", "Asian-Pac-Islander", "Amer-Indian-Eskimo", "Other", "Black"])
-sex = create_mapper(["Female", "Male"])
-country = create_mapper(["United-States", "Cambodia", "England", "Puerto-Rico", "Canada", "Germany", "Outlying-US(Guam-USVI-etc)", "India", "Japan", "Greece", "South", "China", "Cuba", "Iran", "Honduras", "Philippines", "Italy", "Poland", "Jamaica", "Vietnam", "Mexico", "Portugal", "Ireland", "France", "Dominican-Republic", "Laos", "Ecuador", "Taiwan", "Haiti", "Columbia", "Hungary", "Guatemala", "Nicaragua", "Scotland", "Thailand", "Yugoslavia", "El-Salvador", "Trinadad&Tobago", "Peru", "Hong", "Holand-Netherlands"])
-income = create_mapper(["<=50K", ">50K"])
-
-converters = {
-    1: lambda x: workclass[x],
-    3: lambda x: education[x],
-    5: lambda x: marriage[x],
-    6: lambda x: occupation[x],
-    7: lambda x: relationship[x],
-    8: lambda x: race[x],
-    9: lambda x: sex[x],
-    13: lambda x: country[x],
-    14: lambda x: income[x]
-}
 
 """
 load the data into numpy
 this section is also written for use in a
 """
-train = "adult.data"
-test = "adult.test"
+train = "Hill_Valley_without_noise_Training.data"
+test = "Hill_Valley_without_noise_Testing.data"
 
 
 def load(filename):
     with open(filename) as data:
-        adults = [line for line in data if "?" not in line]  # remove lines with unknown data
+        hills = [line for line in data if "?" not in line]  # remove lines with unknown data
 
-    return np.loadtxt(adults,
-                      delimiter=', ',
-                      converters=converters,
-                      dtype='u4',
-                      skiprows=1
-                      )
+    return np.loadtxt(hills,
+        delimiter=',',
+        dtype='u4',
+        skiprows=1
+        )
 
-
-def start_adult():
+def start_hills():
     """
     tx - training x axes
     ty - training y axis
@@ -91,20 +54,20 @@ def start_adult():
     """
     tr = load(train)
     te = load(test)
-    tx, ty = np.hsplit(tr, [14])
-    rx, ry = np.hsplit(te, [14])
+    tx, ty = np.hsplit(tr, [100])
+    rx, ry = np.hsplit(te, [100])
     ty = ty.flatten()
     ry = ry.flatten()
-    return tx, ty, rx, ry
+    return tx, ty, rx, ry 
 
 
 def decisionTree(tx, ty, rx, ry, height):
     """
     """
-    clf = tree.DecisionTreeClassifier(criterion="gini", max_depth=1)
+    clf = tree.DecisionTreeClassifier(criterion="gini", max_depth=height)
     clf.fit(tx, ty)
     dotdata = StringIO()
-    tree.export_graphviz(clf, out_file=dotdata)
+    tree.export_graphviz(clf, out_file=dotdata) 
     graph = pydot.graph_from_dot_data(dotdata.getvalue())
     graph.write_pdf("out.pdf")
     return sum((clf.predict(rx) - ry)**2)/float(len(ry))  # + cross_validation.cross_val_score(clf, tx, ty).mean()
@@ -123,27 +86,26 @@ def knntester(tx, ty, rx, ry, iterations):
     """
     er = []
     et = []
-    positions = range(1, iterations)
-    for n in xrange(1, iterations):
-        neigh = neighbors.KNeighborsClassifier(n_neighbors=n, weights='distance')
+    positions = range(1,iterations)
+    for n in xrange(1,iterations):
+        neigh = neighbors.KNeighborsClassifier(n_neighbors=n)
         neigh = neigh.fit(tx, ty)
         er.append(sum((neigh.predict(rx) - ry)**2)/float(len(ry)))
         et.append(sum((neigh.predict(tx) - ty)**2)/float(len(ty)))
         print n
     plt.plot(positions, et, 'ro', positions, er, 'bo')
     plt.axis([0, iterations, 0, 1])
-    plt.title("Weighted KNN error")
-    plt.ylabel("percent error")
-    plt.xlabel("number of neighbors")
-    plt.savefig('weightedknngraph.png', dpi=300)
-    plt.show()
+    plt.title("Unweighted KNN error")
+    plt.ylabel("Error Rate")
+    plt.xlabel("Number of Neighbors")
+    plt.savefig('knngraph.png', dpi=300)
     print er
     print et
 
 
 def nn(tx, ty, rx, ry, iterations):
     network = buildNetwork(14, 5, 5, 1)
-    ds = ClassificationDataSet(14, 1, class_labels=["<50K", ">=50K"])
+    ds = ClassificationDataSet(14,1, class_labels=["<50K", ">=50K"])
     for i in xrange(len(tx)):
         ds.addSample(tx[i], [ty[i]])
     trainer = BackpropTrainer(network, ds)
@@ -151,7 +113,6 @@ def nn(tx, ty, rx, ry, iterations):
     NetworkWriter.writeToFile(network, "network.xml")
     results = sum((np.array([round(network.activate(test)) for test in rx]) - ry)**2)/float(len(ry))
     return results
-
 
 def loadnn(name):
     network = NetworkReader(name)
@@ -179,13 +140,12 @@ def boostTest(tx, ty, rx, ry, iterations):
         clf.fit(tx, ty)
         resultst.append(sum((clf.predict(tx) - ty)**2)/float(len(ty)))
         resultsr.append(sum((clf.predict(rx) - ry)**2)/float(len(ry)))
-    plt.plot(num, resultst, 'ro', num, resultsr, 'bo')
+    plt.plot(num, resultst, 'ro', num, resultsr, 'bo', num+[iterations], [.5 for i in xrange(iterations+1)], "k--")
     plt.axis([0, iterations, 0, 1])
-    plt.title("Boosted Decision Tree Error")
-    plt.ylabel("Error Rate")
+    plt.title("Boosted Decision Tree error")
+    plt.ylabel("Percent Error")
     plt.xlabel("Number of Estimators")
     plt.savefig('boostgraph.png', dpi=500)
-    plt.show()
     return resultsr
 
 
@@ -197,8 +157,8 @@ def nntester(tx, ty, rx, ry, iterations):
     resultst = []
     resultsr = []
     positions = range(iterations)
-    network = buildNetwork(14, 14, 1, bias=True)
-    ds = ClassificationDataSet(14, 1, class_labels=["<50K", ">=50K"])
+    network = buildNetwork(100, 50, 1, bias=True)
+    ds = ClassificationDataSet(100,1, class_labels=["valley", "hill"])
     for i in xrange(len(tx)):
         ds.addSample(tx[i], [ty[i]])
     trainer = BackpropTrainer(network, ds, learningrate=0.01)
@@ -213,16 +173,15 @@ def nntester(tx, ty, rx, ry, iterations):
     plt.ylabel("Percent Error")
     plt.xlabel("Network Epoch")
     plt.title("Neural Network Error")
-    plt.savefig('3Lnn.png', dpi=200)
-    plt.show()
+    plt.savefig('3Lnn.png', dpi=300)
 
 
 def cvnntester(tx, ty, rx, ry, iterations, folds):
-    network = buildNetwork(14, 14, 1, bias=True)
-    ds = ClassificationDataSet(14, 1, class_labels=["<50K", ">=50K"])
+    network = buildNetwork(100, 50, 1, bias=True)
+    ds = ClassificationDataSet(100,1, class_labels=["valley", "hill"])
     for i in xrange(len(tx)):
         ds.addSample(tx[i], [ty[i]])
-    trainer = BackpropTrainer(network, ds, learningrate=0.01)
+    trainer = BackpropTrainer(network, ds, learningrate=0.005)
     cv = CrossValidator(trainer, ds, n_folds=folds, max_epochs=iterations, verbosity=True)
     print cv.validate()
     print sum((np.array([round(network.activate(test)) for test in rx]) - ry)**2)/float(len(ry))
@@ -238,26 +197,24 @@ def treeTest(tx, ty, rx, ry, iterations):
         clf.fit(tx, ty)
         resultst.append(sum((clf.predict(tx) - ty)**2)/float(len(ty)))
         resultsr.append(sum((clf.predict(rx) - ry)**2)/float(len(ry)))
-    plt.plot(num, resultst, 'ro', num, resultsr, 'bo')
+    plt.plot(num, resultst, 'ro', num, resultsr, 'bo', num+[50], [.5 for i in range(iterations+1)], 'k')
     plt.axis([0, iterations, 0, 1])
     plt.title("Decision Tree error")
     plt.ylabel("Error Rate")
     plt.xlabel("Maximum Tree Depth")
     plt.savefig('entropytree.png', dpi=500)
-    plt.show()
     return resultsr
 
 
 def treeConfusion(tx, ty, rx, ry):
-    clf = tree.DecisionTreeClassifier(max_depth=7, criterion="gini")
+    clf = tree.DecisionTreeClassifier(max_depth=40, criterion="gini")
     results = clf.fit(tx, ty).predict(rx)
 
     cm = confusion_matrix(ry, results)
     return cm
 
-
 if __name__ == "__main__":
-    tx, ty, rx, ry = start_adult()
+    tx, ty, rx, ry = start_hills()
     print "Decision Tree: " + str(decisionTree(rx, ry, tx, ty, 1))
 
     # print "Nearest Neighbor: " + str(knn(rx, ry, tx, ty, 1))
@@ -265,20 +222,13 @@ if __name__ == "__main__":
     # print "5-Nearest Neighbors: " + str(knn(rx, ry, tx, ty, 25))
     # print "Neural Network: " + str(nn(tx, ty, rx, ry, 100))
     # print "Boosting (100): " + str(boosting(tx, ty, rx, ry, 100))
-    # print "Boosting (500): " + str(boosting(tx, ty, rx, ry, 500))
     # print "SVM: " + str(svm(tx, ty, rx, ry))
+    # print "Boosting (500): " + str(boosting(tx, ty, rx, ry, 500))
     # pprint(boostTest(tx, ty, rx, ry, 500))
-    # pprint(treeTest(tx, ty, rx, ry, 25))
+    # pprint(treeTest(tx, ty, rx, ry, 50))
     # nntester(tx, ty, rx, ry, 500)
     # knntester(tx, ty, rx, ry, 100)
     # cvnntester(tx, ty, rx, ry, 500, 10)
+    # print "SVM: " + str(svm(tx, ty, rx, ry))
+    # print "Boosting (500): " + str(boosting(tx, ty, rx, ry, 500))
     # print treeConfusion(tx, ty, rx, ry)
-
-"""
-decision stump result: .248922 error, as a baseline
-pruned decision tree result: .217984 error
-unpruned adaboost decision stump (10): .15926 error
-cross validated 10 fold nn: .241235 error
-SVM rbf Kernel: .24567 error
-adaboost (500): .134 error
-"""
