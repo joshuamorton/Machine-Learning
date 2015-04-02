@@ -2,7 +2,7 @@ import numpy as np
 from StringIO import StringIO
 from pprint import pprint
 import argparse
-from matplotlib import pyplot as pl
+from matplotlib import pyplot as plt
 from collections import Counter
 
 
@@ -70,7 +70,7 @@ def create_dataset(name, test, train):
 def plot(axes, values, x_label, y_label, title, name):
     plt.clf()
     plt.plot(*values)
-    plt.axis(*axes)
+    plt.axis(axes)
     plt.title(title)
     plt.ylabel(y_label)
     plt.xlabel(x_label)
@@ -85,7 +85,7 @@ def pca(tx, ty, rx, ry):
 def ica():
     pass
 
-def em(tx, ty, rx, ry, times=5):
+def em(tx, ty, rx, ry, add="", times=5):
     errs = []
 
     # this is what we will compare to
@@ -122,14 +122,29 @@ def em(tx, ty, rx, ry, times=5):
         # for each value in clusters[3], processed[value] == 1 would hold
         processed = [mapper[val] for val in result]
         errs.append(sum((processed-truth)**2) / float(len(ry)))
-    print errs
+    plot([0, times, min(errs)-.1, max(errs)+.1],[range(2, times), errs, "ro"], "Number of Clusters", "Error Rate", "Expectation Maximization Error", "EM"+add)
 
-def km():
-    pass
 
-def kbest():
-    pass
+def km(tx, ty, rx, ry, add="", times=5):
+    #this does the exact same thing as the above
+    errs = []
 
+    checker = KM(n_clusters=2)
+    checker.fit(ry)
+    truth = checker.predict(ry)
+
+    # so we do this a bunch of times
+    for i in range(2,times):
+        clusters = {x:[] for x in range(i)}
+        clf = KM(n_clusters=i)
+        clf.fit(tx)  #fit it to our data
+        result = clf.predict(rx)  # and test it on the testing set
+        for index, val in enumerate(result):
+            clusters[val].append(index)
+        mapper = {x: round(sum(truth[v] for v in clusters[x])/float(len(clusters[x]))) if clusters[x] else 0 for x in range(i)}
+        processed = [mapper[val] for val in result]
+        errs.append(sum((processed-truth)**2) / float(len(ry)))
+    plot([0, times, min(errs)-.1, max(errs)+.1],[range(2, times), errs, "ro"], "Number of Clusters", "Error Rate", "KMeans clustering error", "KM"+add)
 
 
 if __name__=="__main__":
@@ -141,3 +156,4 @@ if __name__=="__main__":
     train = name+".test"
     train_x, train_y, test_x, test_y = create_dataset(name, test, train)
     em(train_x, train_y, test_x, test_y, times = 10)
+    km(train_x, train_y, test_x, test_y, times = 10)
