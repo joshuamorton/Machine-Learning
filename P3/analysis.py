@@ -3,6 +3,7 @@ from StringIO import StringIO
 from pprint import pprint
 import argparse
 from matplotlib import pyplot as pl
+from collections import Counter
 
 
 from sklearn.decomposition.pca import PCA as PCA
@@ -87,17 +88,41 @@ def ica():
 def em(tx, ty, rx, ry, times=5):
     errs = []
 
+    # this is what we will compare to
     checker = EM(n_components=2)
     checker.fit(ry)
-    compare = checker.predict(ry)
-    print compare
+    truth = checker.predict(ry)
 
+    # so we do this a bunch of times
     for i in range(2,times):
+        clusters = {x:[] for x in range(i)}
+
+        # create a clusterer
         clf = EM(n_components=i)
-        clf.fit(tx)
-        result = clf.predict(rx)
-        errs.append(sum((result-compare)**2) / float(len(ry)))
-    #print errs
+        clf.fit(tx)  #fit it to our data
+        result = clf.predict(rx)  # and test it on the testing set
+
+        # here we make the arguably awful assumption that for a given cluster,
+        # all values in tha cluster "should" in a perfect world, belong in one
+        # class or the other, meaning that say, cluster "3" should really be
+        # all 0s in our truth, or all 1s there
+        # 
+        # So clusters is a dict of lists, where each list contains all items
+        # in a single cluster
+        for index, val in enumerate(result):
+            clusters[val].append(index)
+
+        # then we take each cluster, find the sum of that clusters counterparts
+        # in our "truth" and round that to find out if that cluster should be
+        # a 1 or a 0
+        mapper = {x: round(sum(truth[v] for v in clusters[x])/float(len(clusters[x]))) if clusters[x] else 0 for x in range(i)}
+
+        # the processed list holds the results of this, so if cluster 3 was
+        # found to be of value 1, 
+        # for each value in clusters[3], processed[value] == 1 would hold
+        processed = [mapper[val] for val in result]
+        errs.append(sum((processed-truth)**2) / float(len(ry)))
+    print errs
 
 def km():
     pass
@@ -115,4 +140,4 @@ if __name__=="__main__":
     test = name+".data"
     train = name+".test"
     train_x, train_y, test_x, test_y = create_dataset(name, test, train)
-    em(train_x, train_y, test_x, test_y)
+    em(train_x, train_y, test_x, test_y, times = 10)
