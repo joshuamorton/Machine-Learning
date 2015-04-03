@@ -15,6 +15,10 @@ from sklearn.feature_selection import SelectKBest as best
 from sklearn.feature_selection import chi2
 
 
+from pybrain.datasets.classification import ClassificationDataSet
+from pybrain.tools.shortcuts import buildNetwork
+from pybrain.supervised.trainers import BackpropTrainer
+
 # first map things to things
 def create_mapper(l):
     return {l[n] : n for n in xrange(len(l))}
@@ -75,15 +79,47 @@ def plot(axes, values, x_label, y_label, title, name):
     plt.ylabel(y_label)
     plt.xlabel(x_label)
     plt.savefig(name+".png", dpi=500)
-    plt.show()
+    #plt.show()
     plt.clf()
 
 
 def pca(tx, ty, rx, ry):
-    pass
+    compressor = PCA(n_components = tx[1].size/2)
+    compressor.fit(tx, y=ty)
+    newtx = compressor.transform(tx)
+    newrx = compressor.transform(rx)
+    em(newtx, ty, newrx, ry, add="wPCAtr", times=10)
+    km(newtx, ty, newrx, ry, add="wPCAtr", times=10)
+    nn(newtx, ty, newrx, ry, add="wPCAr")
 
-def ica():
-    pass
+
+def ica(tx, ty, rx, ry):
+    compressor = ICA(whiten=True)  # for some people, whiten needs to be off
+    newtx = compressor.fit_transform(tx)
+    newrx = compressor.fit_transform(rx)
+    em(newtx, ty, newrx, ry, add="wICAtr", times=10)
+    km(newtx, ty, newrx, ry, add="wICAtr", times=10)
+    nn(newtx, ty, newrx, ry, add="wICAtr")
+
+
+def randproj(tx, ty, rx, ry):
+    compressor = RandomProjection(tx[1].size)
+    newtx = compressor.fit_transform(tx)
+    compressor = RandomProjection(tx[1].size)
+    newrx = compressor.fit_transform(rx)
+    em(newtx, ty, newrx, ry, add="wRPtr", times=10)
+    km(newtx, ty, newrx, ry, add="wRPtr", times=10)
+    nn(newtx, ty, newrx, ry, add="wRPtr")
+
+
+def kbest(tx, ty, rx, ry):
+    compressor = best(chi2)
+    newtx = compressor.fit_transform(tx, ty)
+    newrx = compressor.fit_transform(rx, ry)
+    em(newtx, ty, newrx, ry, add="wKBtr", times=10)
+    km(newtx, ty, newrx, ry, add="wKBtr", times=10)
+    nn(newtx, ty, newrx, ry, add="wKBtr")
+
 
 def em(tx, ty, rx, ry, add="", times=5):
     errs = []
@@ -100,6 +136,7 @@ def em(tx, ty, rx, ry, add="", times=5):
         # create a clusterer
         clf = EM(n_components=i)
         clf.fit(tx)  #fit it to our data
+        test = clf.predict(tx)
         result = clf.predict(rx)  # and test it on the testing set
 
         # here we make the arguably awful assumption that for a given cluster,
@@ -124,6 +161,14 @@ def em(tx, ty, rx, ry, add="", times=5):
         errs.append(sum((processed-truth)**2) / float(len(ry)))
     plot([0, times, min(errs)-.1, max(errs)+.1],[range(2, times), errs, "ro"], "Number of Clusters", "Error Rate", "Expectation Maximization Error", "EM"+add)
 
+    # dank magic, wrap an array cuz reasons
+    td = np.reshape(test, (test.size, 1))
+    rd = np.reshape(result, (result.size, 1))
+    newtx = np.append(tx, td, 1)
+    newrx = np.append(rx, rd, 1)
+    nn(newtx, ty, newrx, ry, add="onEM"+add)    
+
+
 
 def km(tx, ty, rx, ry, add="", times=5):
     #this does the exact same thing as the above
@@ -137,6 +182,7 @@ def km(tx, ty, rx, ry, add="", times=5):
     for i in range(2,times):
         clusters = {x:[] for x in range(i)}
         clf = KM(n_clusters=i)
+        test = clf.predict(tx)
         clf.fit(tx)  #fit it to our data
         result = clf.predict(rx)  # and test it on the testing set
         for index, val in enumerate(result):
@@ -145,6 +191,31 @@ def km(tx, ty, rx, ry, add="", times=5):
         processed = [mapper[val] for val in result]
         errs.append(sum((processed-truth)**2) / float(len(ry)))
     plot([0, times, min(errs)-.1, max(errs)+.1],[range(2, times), errs, "ro"], "Number of Clusters", "Error Rate", "KMeans clustering error", "KM"+add)
+
+    newtx = np.append(tx, [test], 1)
+    newrx = np.append(rx, [result], 1)
+    nn(newtx, ty, newrx, ry, add="onEM"+add)  
+
+
+def nn(tx, ty, rx, ry, add="", iterations=250):
+    """
+    trains and plots a neural network on the data we have
+    """
+    resultst = []
+    resultsr = []
+    positions = range(iterations)
+    network = buildNetwork(tx[1].size, 5, 1, bias=True)
+    ds = ClassificationDataSet(tx[1].size, 1)
+    for i in xrange(len(tx)):
+        ds.addSample(tx[i], [ty[i]])
+    trainer = BackpropTrainer(network, ds, learningrate=0.01)
+    for i in positions:
+        trainer.train()
+        resultst.append(sum((np.array([round(network.activate(test)) for test in tx]) - ty)**2)/float(len(ty)))
+        resultsr.append(sum((np.array([round(network.activate(test)) for test in rx]) - ry)**2)/float(len(ry)))
+        print i
+    plot([0, iterations, 0, 1], (positions, resultst, "ro", positions, resultsr, "bo"), "Network Epoch", "Percent Error", "Neural Network Error", "NN"+add)
+
 
 
 if __name__=="__main__":
@@ -156,4 +227,8 @@ if __name__=="__main__":
     train = name+".test"
     train_x, train_y, test_x, test_y = create_dataset(name, test, train)
     em(train_x, train_y, test_x, test_y, times = 10)
-    km(train_x, train_y, test_x, test_y, times = 10)
+    #km(train_x, train_y, test_x, test_y, times = 10)
+    #pca(train_x, train_y, test_x, test_y)
+    #ica(train_x, train_y, test_x, test_y)
+    #randproj(train_x, train_y, test_x, test_y)
+    #kbest(train_x, train_y, test_x, test_y)
