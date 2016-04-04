@@ -211,6 +211,8 @@ def nn(tx, ty, rx, ry, add="", iterations=250):
     for i in xrange(len(tx)):
         ds.addSample(tx[i], [ty[i]])
     trainer = BackpropTrainer(network, ds, learningrate=0.01)
+    train = zip(tx, ty)
+    test = zip(rx, ry)
     for i in positions:
         trainer.train()
         resultst.append(sum(np.array([(round(network.activate(t_x)) - t_y)**2 for t_x, t_y in train])/float(len(train))))
